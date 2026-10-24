@@ -59,12 +59,19 @@ class Auditor:
     def _available(self, audit_at):
         return [o for o in self.index.observations if self.avail.get(o.evidence_id, o.time) <= audit_at]
 
-    def link_all(self, requests: list[Request]) -> dict[str, tuple]:
-        """Direct links per request, then a global one-to-one assignment of workflow targets."""
+    def link_all(self, requests: list[Request], non_deletion: frozenset = frozenset()) -> dict[str, tuple]:
+        """Direct links per request, then a global one-to-one assignment of workflow targets.
+
+        Requests that do not authorize deletion have no deletion workflow, so they never
+        compete for identifier-less workflow targets.
+        """
         prepared = {}
         windows = {}
         for r in requests:
             subject = self.graph.resolve(r.email)
+            if r.case_id in non_deletion:
+                prepared[r.case_id] = (r, subject, {})
+                continue
             if subject is None or r.audit_at is None:
                 prepared[r.case_id] = (r, subject, {})
                 continue
@@ -158,13 +165,14 @@ class Auditor:
 
     def audit(self, requests: list[Request], targets: Optional[set] = None) -> list[CaseResult]:
         """Audit ``targets`` (default: all). Every request still competes in resource linking."""
-        prepared = self.link_all(requests)
+        intents = {r.case_id: self.intent(r) for r in requests}
+        prepared = self.link_all(requests, frozenset(c for c, i in intents.items() if not i.is_deletion))
         results = []
         for r in requests:
             if targets is not None and r.case_id not in targets:
                 continue
             req, subject, links = prepared[r.case_id]
-            intent = self.intent(r)
+            intent = intents[r.case_id]
             if not intent.is_deletion:
                 results.append(CaseResult(r.case_id, "NOT_APPLICABLE", [], subject.user_id if subject else None, intent))
                 continue

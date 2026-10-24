@@ -57,7 +57,10 @@ def main():
         f"- Estimated total cost: ${tot_cost:.4f}",
         f"- Estimated cost per request: ${tot_cost / max(n, 1):.6f}",
         f"- Failed model calls (retried, then rule fallback): {usage['failures']}",
-        f"- Cache hits during this run: {usage['cached_hits']}",
+        f"- Cache hits during this run: {usage['cached_hits']} (each request first warms the cache in a "
+        "concurrent prefetch, then reads it back, so hits are expected). Tokens recorded on the cached "
+        f"results read back: {usage.get('cached_input_tokens', 0):,} in / {usage.get('cached_output_tokens', 0):,} "
+        "out - this is the same spend as above when the cache was cleared before the run, not additional cost.",
         "",
         "## Where the tokens go and why",
         "",

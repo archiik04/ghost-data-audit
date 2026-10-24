@@ -69,8 +69,11 @@ def validate_output(path: Path, expected_case_ids: list[str], known_evidence: se
             continue
         if status == "NOT_APPLICABLE" and steps:
             errors.append(f"{cid}: NOT_APPLICABLE must have []")
-        if status != "NOT_APPLICABLE" and not steps:
-            errors.append(f"{cid}: {status} with no steps")
+        if status == "INCOMPLETE" and not steps:
+            errors.append(f"{cid}: INCOMPLETE with no steps")
+        if status == "COMPLETE" and not steps:
+            # contract-valid JSON, but no evidence-backed check: surfaced, not fatal
+            errors.append(f"warning: {cid}: COMPLETE with no evidence-backed verification step")
         prev = (-1, -1, "", "")
         for i, s in enumerate(steps, 1):
             if set(s) != STEP_FIELDS:

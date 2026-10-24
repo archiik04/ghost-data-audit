@@ -131,3 +131,43 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-24T14:51:15Z] Build evidence engine and score against the 32 samples
+
+User Prompt (verbatim, secrets redacted):
+Yes, build the evidence engine as planned and score it against the 32 samples.
+
+Agent Response Summary:
+Built a deterministic deletion-audit engine in code/ghost: generic parsers for SQL replica dumps, JSON bundles/readbacks, four log syntaxes, ledgers, PDFs and screenshots; an identity graph with confirmed/supported/candidate tiers and a global one-to-one assignment for identifier-less workflow targets; state reconstruction at audit_at; policy mapping from deletion_rules.csv; and contract ordering. Added an evaluation harness (status, exact-row, sequence, step P/R/F1, field accuracy, false COMPLETE) and iterated one change at a time from a baseline of 0.906 status / 0.219 exact rows / 0.783 step F1. Added gpt-5.4-mini intent classification (3-vote, schema-validated, cached) and gpt-5.4 screenshot transcription.
+
+Actions:
+* Created code/ghost/{model,data,evidence,identity,policy,audit,pipeline,intent,vision,output}.py, code/main.py, code/evaluation/{main,metrics}.py
+* Ran python code/evaluation/main.py repeatedly; recorded each experiment's metrics
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+
+## [2026-10-24T14:51:15Z] Competition-mode hardening: edge cases, tests, release gate
+
+User Prompt (verbatim, secrets redacted):
+[pasted "20. COMPETITION MODE - EDGE CASES, ROBUSTNESS, AND MAXIMUM VERIFIED PERFORMANCE" requirements: edge-case coverage matrix, evidence-confidence tiers, adversarial testing, disciplined evaluation, reliability features, engineering quality, red-team review, measurable release gate, AI-judge handoff document; execute in the repository and report measured results]
+
+Agent Response Summary:
+Added 37 synthetic regression/adversarial tests (identity, temporal, storage, policy, injection, model failure, cache corruption, output contract); they exposed and fixed a shared-phone identity contamination bug, and an eval-set review exposed and fixed a temporal leak (records first seen after audit_at). Wrote the edge-case matrix, handoff document, evaluation report and usage report from actual runs; added an atomic writer plus read-back validator and a packaging script with secret/dataset checks. Final measured sample results: status accuracy 1.000, exact rows 0.719, step F1 0.958, 0 false COMPLETE; full run 518 rows, 0 schema violations, 1205 model calls, est. USD 0.65.
+
+Actions:
+* Created code/tests/*, code/docs/{EDGE_CASES,HANDOFF}.md, code/evaluation/{evaluation_report,usage_report}.md, code/tools/package.py, code/requirements.txt; rewrote README.md
+* Cleared model caches and ran python code/main.py (final output.csv); python -m pytest code/tests (37 passed); python code/tools/package.py (code.zip, no secrets/dataset)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+

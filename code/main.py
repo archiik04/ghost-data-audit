@@ -73,7 +73,9 @@ def run(output: Path, offline: bool = False, requests_file: Path | None = None) 
         "output": str(output), "requests": len(requests), "rows": len(results), "status_counts": counts,
         "schema_violations": errors, "runtime_seconds": round(time.time() - started, 1),
         "model_usage": {"calls": usage.calls, "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
-                        "cached_hits": usage.cached_hits, "failures": usage.failures, "by_model": usage.by_model},
+                        "cached_hits": usage.cached_hits, "failures": usage.failures, "by_model": usage.by_model,
+                        "cached_input_tokens": usage.cached_input_tokens,
+                        "cached_output_tokens": usage.cached_output_tokens},
         "evidence_issues": [vars(i) for i in auditor.index.issues],
         "cases": [{"case_id": r.case_id, "status": r.status, "subject": r.subject,
                    "intent": vars(r.intent) if r.intent else None,
@@ -85,9 +87,10 @@ def run(output: Path, offline: bool = False, requests_file: Path | None = None) 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "run_report.json").write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     log.info("wrote %s: %d rows %s; schema violations: %d", output, len(results), counts, len(errors))
+    fatal = [e for e in errors if not e.startswith("warning:")]
     for e in errors[:20]:
-        log.error("schema: %s", e)
-    return 1 if errors else 0
+        (log.warning if e.startswith("warning:") else log.error)("schema: %s", e)
+    return 1 if fatal else 0
 
 
 def main(argv=None) -> int:

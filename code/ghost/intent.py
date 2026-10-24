@@ -95,6 +95,15 @@ class Usage:
         self.cached_hits = 0
         self.failures = 0
         self.by_model: dict[str, dict] = {}
+        # tokens originally spent to produce results served from cache in this run
+        self.cached_input_tokens = 0
+        self.cached_output_tokens = 0
+
+    def add_cached(self, inp: int, out: int):
+        with self._lock:
+            self.cached_hits += 1
+            self.cached_input_tokens += inp
+            self.cached_output_tokens += out
 
     def add(self, model: str, inp: int, out: int):
         with self._lock:
@@ -128,7 +137,7 @@ class LLMIntentClassifier:
         key = hashlib.sha256(f"{self.model}|{PROMPT_VERSION}|{self.votes}|{text}".encode("utf-8")).hexdigest()[:32]
         return self.cache_dir / f"intent_{key}.json"
 
-    def _one_call(self, text: str) -> Optional[str]:
+    def _one_call(self, text: str, spent: Optional[list] = None) -> Optional[str]:
         for attempt in range(self.max_retries):
             try:
                 resp = self.client.chat.completions.create(
@@ -138,13 +147,18 @@ class LLMIntentClassifier:
                     response_format={"type": "json_schema", "json_schema": SCHEMA},
                 )
                 u = getattr(resp, "usage", None)
-                self.usage.add(self.model, getattr(u, "prompt_tokens", 0) or 0, getattr(u, "completion_tokens", 0) or 0)
+                inp, out = getattr(u, "prompt_tokens", 0) or 0, getattr(u, "completion_tokens", 0) or 0
+                self.usage.add(self.model, inp, out)
+                if spent is not None:
+                    spent[0] += inp
+                    spent[1] += out
                 data = json.loads(resp.choices[0].message.content)
                 if data.get("label") in LABELS:
                     return data["label"]
                 return None
             except Exception:  # noqa: BLE001 - bounded retry, then fall back to rules
-                self.usage.failures += 1
+                with self.usage._lock:
+                    self.usage.failures += 1
                 time.sleep(min(2 ** attempt, 8))
         return None
 
@@ -169,14 +183,15 @@ class LLMIntentClassifier:
         if path and path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                self.usage.cached_hits += 1
+                self.usage.add_cached(*data.get("tokens", (0, 0)))
                 return IntentResult(data["is_deletion"], data["label"], "cache", data.get("detail", ""))
             except (json.JSONDecodeError, KeyError):
                 path.unlink(missing_ok=True)  # corrupted entry: recompute
         rules = rule_intent(text)
         if self.client is None:
             return rules
-        labels = [l for l in (self._one_call(text) for _ in range(self.votes)) if l]
+        spent = [0, 0]
+        labels = [l for l in (self._one_call(text, spent) for _ in range(self.votes)) if l]
         if not labels:
             return IntentResult(rules.is_deletion, rules.label, "rules-fallback", "model unavailable")
         counts = Counter(labels)
@@ -187,7 +202,8 @@ class LLMIntentClassifier:
                               f"votes={dict(counts)} rules={rules.label}")
         if path:
             path.write_text(json.dumps({"is_deletion": result.is_deletion, "label": result.label,
-                                        "detail": result.detail}), encoding="utf-8")
+                                        "detail": result.detail, "model": self.model, "tokens": spent}),
+                            encoding="utf-8")
         return result
 
 
