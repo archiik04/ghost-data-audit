@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 code/.cache/
 code.zip
+code/evaluation/out/
