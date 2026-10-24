@@ -8,6 +8,7 @@ Ownership of a resource is decided per subject from explicit evidence only:
                that also appears in an evidence file anchored to the subject.
 * CANDIDATE  - deletion-workflow target of this request with no anchoring file
                and no competing owner.
+* CONTRADICTED - a catalog (activity) claim refuted by the record's own content; never planned.
 Names are never sufficient on their own (similar-name decoys are common).
 A resource whose keys match a different person is never assigned by timing.
 """
@@ -21,7 +22,8 @@ from typing import Optional
 from .model import Observation, norm_email, norm_name, norm_phone, parse_time
 
 CONFIRMED, SUPPORTED, CANDIDATE = "confirmed", "supported", "candidate"
-TIER_RANK = {CONFIRMED: 3, SUPPORTED: 2, CANDIDATE: 1}
+CONTRADICTED = "contradicted"  # a claimed link that the record's own content refutes; never planned
+TIER_RANK = {CONFIRMED: 3, SUPPORTED: 2, CANDIDATE: 1, CONTRADICTED: 0}
 
 WORKFLOW_EVENTS = {"DELETE_RECORD", "REDACT_RECORD", "ANONYMIZE_RECORD", "DISABLE_DATA_FLOW", "BLOCK_RESTORE",
                    "CHECK_DATA_FLOW", "CHECK_RESTORE_ACCESS", "RETAIN_RECORD"}
@@ -130,9 +132,12 @@ def workflow_targets(activity: list[dict], reported_at, audit_at) -> dict[str, l
     return out
 
 
-def link_resources(graph: IdentityGraph, subject: Subject, observations: list[Observation],
-                   workflow: dict[str, list[dict]], competing_workflows: dict[str, set]) -> dict[str, Link]:
-    """Assign resources to the subject using only evidence available at audit time."""
+def link_resources(graph: IdentityGraph, subject: Subject, observations: list[Observation]) -> dict[str, Link]:
+    """Direct, evidence-based ownership links for one subject.
+
+    Ownership is timeless, so all observations may be used; the caller restricts *state*
+    to audit_at. Identifier-less workflow targets are assigned globally by the pipeline.
+    """
     links: dict[str, Link] = {}
     strong, phones = subject.strong_keys(), subject.phone_keys()
     foreign_owned: dict[str, set] = {}
@@ -145,6 +150,7 @@ def link_resources(graph: IdentityGraph, subject: Subject, observations: list[Ob
             link.reasons.append(reason)
         link.evidence.add(evidence_id)
 
+    confirm_sources: dict[str, set] = {}
     for obs in observations:
         keys = obs.keys | obs.exposed
         owners = graph.owners_of(obs)
@@ -153,6 +159,7 @@ def link_resources(graph: IdentityGraph, subject: Subject, observations: list[Ob
             foreign_owned.setdefault(obs.resource_id, set()).update(others)
         if keys & strong or obs.stable_ref == subject.user_id:
             add(obs.resource_id, CONFIRMED, f"identifier match in {obs.evidence_id}", obs.evidence_id)
+            confirm_sources.setdefault(obs.resource_id, set()).add(obs.source)
         elif keys & phones:
             # Phones are shared and recycled more often than emails: link only when the number
             # belongs to this subject alone and no stronger identifier names someone else.
@@ -165,31 +172,28 @@ def link_resources(graph: IdentityGraph, subject: Subject, observations: list[Ob
             if phone_owners == {subject.user_id} and not (strong_owners - {subject.user_id}):
                 add(obs.resource_id, SUPPORTED, f"unique phone match in {obs.evidence_id}", obs.evidence_id)
 
+    # A catalog link is an activity-log claim. If the record itself shows direct identifiers and
+    # none of them is this subject's, the claim is contradicted by content: do not act on it.
+    subject_keys = subject.all_keys()
+    for rid, sources in confirm_sources.items():
+        if sources != {"activity"}:
+            continue
+        shown = set()
+        for obs in observations:
+            if obs.resource_id == rid and obs.source != "activity":
+                shown |= {e for e in obs.exposed if e[0] in ("email", "phone", "hash")}
+        if shown and not (shown & subject_keys):
+            link = links[rid]
+            link.tier = CONTRADICTED
+            link.conflicts.append(f"catalog link refuted: record shows identifiers {sorted(shown)[:3]} "
+                                  "that are not the subject's")
+
     # propagate through explicit resource links (search document -> source account, etc.)
     for obs in observations:
         for target in obs.linked_resources:
-            if target in links and obs.resource_id not in links and not foreign_owned.get(obs.resource_id):
+            if target in links and links[target].tier != CONTRADICTED and obs.resource_id not in links                     and not foreign_owned.get(obs.resource_id):
                 add(obs.resource_id, SUPPORTED, f"linked to {target} in {obs.evidence_id}", obs.evidence_id)
 
-    anchor_files = {e for l in links.values() if l.tier == CONFIRMED for e in l.evidence}
-    files_by_resource: dict[str, set] = {}
-    for obs in observations:
-        files_by_resource.setdefault(obs.resource_id, set()).add(obs.evidence_id)
-
-    for rid, events in workflow.items():
-        if rid in links:
-            links[rid].reasons.append("deletion-workflow target of this request")
-            continue
-        if foreign_owned.get(rid):
-            continue  # belongs to someone else: never assign by timing
-        rivals = competing_workflows.get(rid, set())
-        shared = files_by_resource.get(rid, set()) & anchor_files
-        if shared:
-            add(rid, SUPPORTED, "workflow target appearing in subject-anchored evidence", sorted(shared)[0])
-        elif not rivals:
-            link = links.setdefault(rid, Link(rid, CANDIDATE))
-            link.reasons.append("workflow target with no competing request")
-            link.evidence.add(events[0]["activity_id"])
     for rid, owners in foreign_owned.items():
         if rid in links:
             links[rid].conflicts.append(f"also linked to {sorted(owners)}")

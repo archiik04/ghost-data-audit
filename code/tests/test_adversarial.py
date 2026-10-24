@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from conftest import ops
 from test_pipeline import account, base, sql_dump
 
-from ghost.intent import LLMIntentClassifier, rule_intent
+from ghost.intent import LLMIntentClassifier, rule_intent  # noqa: F401
 
 
 # ---------------------------------------------------------------- A: adversarial evidence
@@ -146,3 +146,41 @@ def test_M6_rule_intent_multilingual():
     assert rule_intent("このアカウントの完全な削除を依頼します").is_deletion
     assert rule_intent("Quiero eliminar mi cuenta").is_deletion
     assert not rule_intent("Can you correct my delivery address?").is_deletion
+
+
+# ---------------------------------------------------------------- screenshots (V*)
+
+def screen_world(world, text, link_rid, link_email="ana@x.com", link_user="user_1", alias=None):
+    base(world)
+    world.act("l1", "2026-09-01T00:00:00Z", "LINK_RESOURCE_IDENTITY", "x", link_rid, source="data_catalog",
+              details=f"Data catalog linked {link_rid} ({alias or link_rid}) to {link_email} and {link_user}.")
+    world.file("e1", "screen.png", "2026-09-10T00:00:00Z", b"\x89PNG fake")
+    world.request("c1", "ana@x.com")
+    world.build()
+    from ghost.data import load_dataset, load_requests
+    from ghost.pipeline import Auditor
+    ds = load_dataset(world.root)
+    reqs, _ = load_requests(world.root / "requests.csv")
+    auditor = Auditor(ds, lambda q: rule_intent(q.request_text), vision=lambda path, eid: text)
+    return {r.case_id: r for r in auditor.audit(reqs)}
+
+
+def test_V1_connector_screen_shows_active_flow(world):
+    text = ("Connections\n1\ndata_flow_7\ncustomer_analytics_warehouse\nana@x.com\nContinuous\n1,284\n"
+            "2\ndata_flow_8\nwarehouse\nbo@x.com\nContinuous\n")
+    res = screen_world(world, text, "data_flow_7")
+    assert ("REPORT_ACTIVE_DATA_FLOW", "data_flow_7", "e1") in ops(res["c1"])
+
+
+def test_V2_screen_showing_another_person_refutes_catalog_claim(world):
+    # catalog claims marketing_1 is Ana's; the screen shows someone else's live profile under that id
+    text = "Audience Operations\nSoo Park\nLive\nmarketing_1 · soo@other.example · +82 10 5837 9451\n"
+    res = screen_world(world, text, "marketing_1")
+    assert all(s["resource_id"] != "marketing_1" for s in res["c1"].steps)
+    assert any("refuted" in n for n in res["c1"].notes)
+
+
+def test_V3_retained_reference_screen_verifies_clean_tombstone(world):
+    text = "Customer Reference Registry\nuser_1\nRetained reference\nCustomer key\n"
+    res = screen_world(world, text, "tombstone_1", alias="user_1")
+    assert ops(res["c1"]) == [("VERIFY_RECORD_REDACTED", "tombstone_1", "e1")]

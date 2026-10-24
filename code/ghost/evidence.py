@@ -461,25 +461,78 @@ def document_mentions(text: str, evidence_id: str, time: datetime, index: Eviden
     idents = identifiers_in_text(text)
     rids = set(RESOURCE_RE.findall(text))
     for alias, rid in (aliases or {}).items():
+        if alias.startswith("__"):
+            continue
         if alias and re.search(r"(?<![\w-])" + re.escape(alias) + r"(?![\w-])", text):
             rids.add(rid)
     users = {i[1] for i in idents if i[0] == "user"}
     emails = {i[1] for i in idents if i[0] == "email"}
-    # A document naming several people cannot establish who owns a resource it mentions.
+    # A document naming several people cannot establish who owns a resource it mentions as a
+    # whole; in that case only the identifiers in the resource's own table row/section count.
     single_subject = len(users) <= 1 and len(emails) <= 1
+    if single_subject and len(users) == 1:
+        # a deleted-account reference registry shows a tombstone under its stable user_id
+        for alias, rid in (aliases or {}).get("__user_ref__", {}).items():
+            if alias in users and re.search(r"\breference\b", text, re.I):
+                rids.add(rid)
+    segments = resource_segments(text, rids)
     for rid in sorted(rids):
         obs = Observation(evidence_id=evidence_id, time=time, resource_id=rid, system=system_for(rid) or "unknown",
                           source=source, present=True)
-        if single_subject:
-            obs.keys |= idents
-            if users:
-                obs.stable_ref = next(iter(users))
-            if obs.system not in ("security_service", "legal_service", "identity_service"):
-                obs.exposed |= {i for i in idents if i[0] != "user"}
-                obs.pii_checked = True
-            if obs.system == "support_platform" and source in ("pdf", "image"):
-                obs.record_type = "SUPPORT_ATTACHMENT"
+        segment = segments.get(rid, "")
+        local = identifiers_in_text(segment) if segment else set()
+        local_single = len({i[1] for i in local if i[0] == "user"}) <= 1 and             len({i[1] for i in local if i[0] == "email"}) <= 1
+        scope = idents if single_subject else (local if local_single else set())
+        local_users = {i[1] for i in scope if i[0] == "user"}
+        obs.keys |= scope
+        if len(local_users) == 1:
+            obs.stable_ref = next(iter(local_users))
+        if obs.system not in ("security_service", "legal_service"):
+            # a tombstone may keep its user_id; any other identifier on it is exposure
+            obs.exposed |= {i for i in scope if i[0] != "user"}
+            obs.pii_checked = bool(single_subject or (segment and local_single))
+        if obs.system == "support_platform" and source == "pdf":
+            obs.record_type = "SUPPORT_ATTACHMENT"  # a PDF stored on a ticket is an attachment
+        if source == "image":
+            screen_state(obs, segment or text, text)
         index.observations.append(obs)
+
+
+ACTIVE_WORDS = re.compile(r"\b(healthy|active|enabled|running|continuous|live|delivered|syncing)\b", re.I)
+INACTIVE_WORDS = re.compile(r"\b(disabled|paused|stopped|inactive|suspended|deactivated)\b", re.I)
+BLOCKED_WORDS = re.compile(r"restore (blocked|disabled|denied)|deletion[- ]block|not restorable|quarantined|"
+                           r"restore access: (none|revoked)", re.I)
+
+
+def resource_segments(text: str, rids: set) -> dict:
+    """Text belonging to each resource: from each mention up to the next mention of another resource.
+
+    Screens and tables list one record per row/panel, so identifiers that follow a resource id
+    (before the next id) belong to that record.
+    """
+    if not rids:
+        return {}
+    pattern = re.compile("|".join(re.escape(r) for r in sorted(rids, key=len, reverse=True)))
+    hits = list(pattern.finditer(text))
+    out: dict[str, str] = {}
+    for n, m in enumerate(hits):
+        end = hits[n + 1].start() if n + 1 < len(hits) else min(len(text), m.end() + 600)
+        out[m.group(0)] = out.get(m.group(0), "") + "\n" + text[m.end():end]
+    return out
+
+
+def screen_state(obs: Observation, segment: str, whole: str) -> None:
+    """Process state shown on an application screen (connectors, backups)."""
+    if obs.system == "integration_service":
+        if INACTIVE_WORDS.search(segment):
+            obs.enabled = False
+        elif ACTIVE_WORDS.search(segment):
+            obs.enabled = True
+    elif obs.system == "backup_service":
+        if BLOCKED_WORDS.search(segment):
+            obs.restore_allowed = False
+        elif re.search(r"\b(restore|recovery)\b", whole, re.I):
+            obs.restore_allowed = True  # listed as a restorable archive in a recovery console
 
 
 def pdf_text(path: Path) -> str:
@@ -513,6 +566,8 @@ def activity_observations(activity: list[dict], index: EvidenceIndex) -> dict:
                 # aliases such as invoice numbers or file names; never identity-like values
                 if alias != target and classify_identifier(alias) is None and not is_resource_id(alias):
                     aliases[alias] = target
+                elif target.startswith("tombstone_") and re.fullmatch(r"user_\d+", alias):
+                    aliases.setdefault("__user_ref__", {})[alias] = target
                 obs = Observation(a["activity_id"], t, target, system_for(target) or a["target_system"], "activity")
                 obs.keys |= {("email", email.lower()), ("user", user)}
                 if "belongs only to" in details:

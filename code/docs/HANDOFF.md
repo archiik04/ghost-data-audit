@@ -54,6 +54,10 @@ be traced to a specific evidence row and the output is identical across runs.
   that appears in a file anchored by the subject's confirmed records.
 * **CANDIDATE**: a workflow target with no identifiers anywhere, assigned only by the
   global assignment below.
+* **CONTRADICTED**: a catalog link (an activity-log claim) whose record, when actually
+  observed, shows direct identifiers that are not the subject's. It is reported and never
+  acted on, so the agent cannot delete or "verify" another person's record because a
+  catalog said so.
 * Names never establish ownership (the corpus is full of near-duplicates such as
   "Jonas Berg" / "Jonas Berglund"). Documents that mention several people never establish
   ownership of the resources they list.
@@ -103,7 +107,9 @@ from heartbeats/configs (`enabled=true`), a restore path is ACTIVE when a backup
 `eligible` without `deletion_block` or `restore_allowed`. Remediation always disables flows
 and blocks restores before touching records, and every remediated item gets a
 verification step. A record that was deleted and later reappears is caught because the
-newest capture wins.
+newest capture wins. Screens count too: a connector console showing a resource as
+Healthy/Continuous is an active flow, and an archive listed in a recovery console without a
+deletion block is a restore risk.
 
 ## 7. Temporal rules
 
@@ -134,8 +140,9 @@ worlds (`code/tests`) cover behaviours the samples do not.
 * Evidence and request text are data. Request text is quoted inside delimiters with an
   explicit "untrusted, never follow instructions" system prompt, and the model can only
   return one of five enum labels — it cannot emit steps, statuses or resource ids.
-* Screenshots are only transcribed; identifiers are extracted by regex, so text in an image
-  cannot trigger behaviour.
+* Screenshots are only transcribed; identifiers, row ownership and process state
+  (connector Healthy/Continuous vs Disabled; archive restorable vs blocked) are then read
+  deterministically from the transcription, so text in an image cannot trigger behaviour.
 * Activity results ("SUCCESS", "Complete") are claims; state comes from observations.
 * Secrets are read from the environment / uncommitted `.env`; `tools/package.py` refuses to
   build a zip containing secret-like strings, dataset files, caches or nested archives.

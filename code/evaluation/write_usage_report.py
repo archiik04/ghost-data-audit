@@ -67,7 +67,10 @@ def main():
         "- Every deterministic stage (evidence parsing, identity graph, state reconstruction, policy, planning, "
         "serialization) uses **zero** model tokens.",
         "- Intent: one short prompt per distinct request text, sampled 3 times for a majority vote "
-        "(the 32 samples contain no NOT_APPLICABLE example, so this step gets extra robustness).",
+        "(the 32 samples contain no NOT_APPLICABLE example, so this step gets extra robustness). "
+        "The 32 sample requests are classified in the same run because every participant-facing "
+        "request competes in the assignment of identifier-less workflow records (a non-deletion "
+        "request must not claim one); their calls are included in the totals above.",
         "- Vision: one transcription per screenshot (11 images), cached by image SHA-256; identifiers are then "
         "extracted deterministically from the transcription.",
         "- Re-runs are free: results are cached by (model, prompt version, content hash).",

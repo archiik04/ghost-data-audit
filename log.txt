@@ -171,3 +171,23 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-24T23:42:40Z] Final review pass of code and reports before submission
+
+User Prompt (verbatim, secrets redacted):
+Do a final review pass of the code and reports before I submit.
+
+Agent Response Summary:
+Reviewed the full 518-row output, not only the samples, and found 3 COMPLETE rows whose checks cited no evidence. These traced to screenshots being read only as "record exists": an active connector (case_39) and a restorable archive (case_55) were missed, and one weak timing-only legal-hold link was assumed present. Added deterministic screen-state reading and row-level ownership for multi-person screens. Also fixed: ticket screenshots typed as attachments (case_53), a catalog claim refuted by the screen showing another person (new CONTRADICTED tier, case_63), and clean tombstones shown by user_id (case_46). Removed dead code; sample metrics unchanged (status 1.000, exact 0.719, step F1 0.958, 0 false COMPLETE); 40 tests pass. A fresh cache-free release run reproduced output.csv byte-for-byte (1205 calls, est. USD 0.65), and the reports, edge-case matrix and handoff were updated to match.
+
+Actions:
+* Edited code/ghost/{evidence,identity,pipeline,output}.py, code/main.py, code/tests/test_adversarial.py, code/evaluation/{evaluation_report.md,write_usage_report.py}, code/docs/{HANDOFF,EDGE_CASES}.md, README.md
+* Ran pytest (40 passed), code/evaluation/main.py --model, cache-free code/main.py, code/tools/package.py (26 files, no key/dataset/caches)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+

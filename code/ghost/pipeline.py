@@ -9,7 +9,7 @@ from typing import Callable, Optional
 from .audit import Plan, Step, finalize, plan_resource, reconstruct
 from .data import Dataset, Request
 from .evidence import build_index
-from .identity import CANDIDATE, CONFIRMED, SUPPORTED, IdentityGraph, Link, link_resources, workflow_targets
+from .identity import CANDIDATE, CONFIRMED, CONTRADICTED, SUPPORTED, IdentityGraph, Link, link_resources, workflow_targets
 from .model import EvidenceIndex, parse_time, system_for
 from .policy import WORKFLOW_ACTION, Policy
 
@@ -56,9 +56,6 @@ class Auditor:
 
     # ------------------------------------------------------------------ linking
 
-    def _available(self, audit_at):
-        return [o for o in self.index.observations if self.avail.get(o.evidence_id, o.time) <= audit_at]
-
     def link_all(self, requests: list[Request], non_deletion: frozenset = frozenset()) -> dict[str, tuple]:
         """Direct links per request, then a global one-to-one assignment of workflow targets.
 
@@ -88,7 +85,7 @@ class Auditor:
                 continue
             subject = self.graph.resolve(r.email)
             # direct evidence only; workflow targets are assigned globally below
-            links = link_resources(self.graph, subject, all_obs, {}, {})
+            links = link_resources(self.graph, subject, all_obs)
             prepared[r.case_id] = (r, subject, links)
         self._assign_workflow(prepared, windows, rivals)
         return prepared
@@ -183,6 +180,9 @@ class Auditor:
                 system = system_for(rid)
                 if system is None:
                     continue
+                if link.tier == CONTRADICTED:
+                    plan.notes.append(f"{rid}: not planned; {link.conflicts[-1]}")
+                    continue
                 st = reconstruct(rid, system, self.by_resource.get(rid, []), self.index.coverage, self.avail,
                                  r.audit_at)
                 actions = {WORKFLOW_ACTION[a["event_type"]] for a in self.activity_by_resource.get(rid, [])
@@ -193,7 +193,7 @@ class Auditor:
                     plan.notes.append(f"{rid}: first recorded after audit_at; did not exist at audit time")
                     continue
                 if st.present is None and st.enabled is None and st.restore_allowed is None:
-                    if system in ("security_service", "legal_service"):
+                    if system in ("security_service", "legal_service") and link.tier != CANDIDATE:
                         # retained record known only from later captures: its availability is still
                         # a required end state, verified after remediation
                         st.present = True
