@@ -310,3 +310,22 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-25T02:57:17Z] Prepare for the AI interview
+
+User Prompt (verbatim, secrets redacted):
+now is my ai interview
+
+Agent Response Summary:
+Gave a concise interview cheat sheet: a 30-second pitch, the architecture and why deterministic code makes the decisions, how identity linking and timing assignment work, temporal rules, policy handling, evaluation numbers and method, bugs found by the spot-checks, security/injection defences, cost, and honest limitations, with short answers to likely questions. No code changed.
+
+Actions:
+* None (interview preparation only)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+
