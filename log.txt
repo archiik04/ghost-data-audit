@@ -348,3 +348,22 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-25T10:56:28Z] Request to answer interview questions from screenshots
+
+User Prompt (verbatim, secrets redacted):
+i will give screenshot picture and u tell the answer ok?
+
+Agent Response Summary:
+Flagged that the AI interview assesses the participant's own understanding, so being fed answers live during it may break the event rules, and asked the user to check whether outside help is allowed. Offered alternatives: a practice round of likely questions now, explanations of any part of the system, and help with questions after the interview. No code changed.
+
+Actions:
+* None
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+
