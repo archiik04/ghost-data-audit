@@ -252,3 +252,22 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-25T01:15:13Z] Confidence check on submission quality
+
+User Prompt (verbatim, secrets redacted):
+are you sure this is the best?
+
+Agent Response Summary:
+Answered honestly that "best" cannot be guaranteed: the hidden answers and scoring weights are unknown and the samples cover only a few evidence families. Separated what is verified (sample metrics, invariants, determinism, spot-checked families) from what is not (about 250 timing-only account links, unspot-checked clusters), and named the remaining improvement option (a second targeted spot-check) and its expected value. No code changed.
+
+Actions:
+* None (assessment only)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+
