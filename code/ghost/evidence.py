@@ -154,7 +154,10 @@ def record_to_obs(rec: dict, evidence_id: str, default_time: datetime, source: s
     retain = flat.get("retention_until") or flat.get("retain_until") or flat.get("retained_until")
     if retain and not is_nullish(retain):
         obs.retain_until = parse_time(str(retain))
-    if str(flat.get("storage_class", "")).lower() == "ticket_attachment":
+    if obs.system == "support_platform" and (
+            str(flat.get("storage_class", "")).lower() == "ticket_attachment"
+            or "attachment" in str(flat.get("collection_name", "")).lower()
+            or (isinstance(flat.get("file_name"), str) and flat["file_name"].lower().endswith((".pdf", ".png", ".jpg")))):
         obs.record_type = "SUPPORT_ATTACHMENT"
     if isinstance(flat.get("record_type"), str):
         obs.record_type = flat["record_type"]
@@ -184,7 +187,11 @@ def ledger_to_obs(row: dict, evidence_id: str, default_time: datetime, source: s
     obs = Observation(evidence_id=evidence_id, time=time, resource_id=rid,
                       system=system_for(rid) or (row.get("system") or "unknown"), source=source,
                       record_type=(row.get("record_type") or "").strip().upper() or None, result=result)
-    subject = (row.get("subject_reference") or "").strip()
+    subject = ""
+    for f in ("subject_reference", "lookup_value", "lookup_key", "subject_ref"):
+        if not is_nullish(row.get(f)):
+            subject = str(row[f]).strip()
+            break
     ident = classify_identifier(subject)
     if ident:
         obs.keys.add(ident)
@@ -258,11 +265,13 @@ def parse_sql(path: Path, evidence_id: str, file_time: datetime, index: Evidence
                 per_system.setdefault(obs.system, set()).add(obs.resource_id)
                 if not scope:
                     covered.add(obs.system)
-        # Inventory extracts (snapshot_scope) list selected rows only, so absence there proves
-        # nothing. Replica-topology dumps hold whole tables: absence of a known resource is meaningful.
-        for system in ([] if scope else covered):
+        # Replica-topology dumps hold whole tables: absence of a known resource is meaningful.
+        # Inventory extracts (snapshot_scope) declare which systems were captured but list
+        # selected rows; their absence only fills gaps where nothing explicit is known.
+        for system in covered:
             index.coverage.append(Coverage(evidence_id, scope.get(system, file_time), system,
-                                           per_system.get(system, set()), label="sql_snapshot"))
+                                           per_system.get(system, set()),
+                                           label="sql_inventory" if scope else "sql_snapshot"))
     finally:
         con.close()
 
@@ -336,6 +345,7 @@ def walk_json(node, evidence_id: str, time: datetime, index: EvidenceIndex, keys
 KV_RE = re.compile(r'(\w+)=("(?:[^"\\]|\\.)*"|\S+)')
 TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT[\d:.]+Z)\s+(.*)$")
 BRACKET_RE = re.compile(r"^\[(\w+)\]\s+\[([\w\-]+)\]\s+\[([\w\-]+)\]\s+(\w+):\s*(.*)$")
+SYSLOG_RE = re.compile(r"^<\d+>\d*\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)$")  # RFC 5424
 PIPE_RE = re.compile(r"^\|?\s*(\w+)\s*\|\s*([\w\-]+)\s*\|\s*([\w\-]+)\s*\|\s*(\w+)\s*\|\s*(.*)$")
 
 
@@ -359,6 +369,13 @@ def parse_log_line(line: str) -> Optional[tuple[datetime, dict]]:
         except json.JSONDecodeError:
             return None
         return ts, {k: (str(v) if not isinstance(v, (dict, list)) else v) for k, v in data.items()}
+    sl = SYSLOG_RE.match(rest)
+    if sl:
+        data = parse_kv(sl.group(6))
+        data.setdefault("service", sl.group(2))
+        if sl.group(3) != "-":
+            data.setdefault("trace_id", sl.group(3))
+        return ts, data
     b = BRACKET_RE.match(rest) or PIPE_RE.match(rest)
     if b:
         data = parse_kv(b.group(5))

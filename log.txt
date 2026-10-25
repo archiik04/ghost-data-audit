@@ -210,3 +210,26 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-25T01:10:32Z] Evaluation-set spot-check, detailed tests, strengthen submission
+
+User Prompt (verbatim, secrets redacted):
+can you do the spot-speck now? run some more detaailed tests and tell me how i can strengthen the submission more
+(mid-turn) the highest is now 88.2 score
+(earlier, same exchange) the highest score on the leaderboard is 80.6 i need more ig will this submission mark it??
+
+Agent Response Summary:
+Grouped the 518 requests into ~50 evidence-family clusters and audited rows from families the samples never exercise against raw evidence, using a new inspector tool and automatic consistency checks. Found and fixed: RFC 5424 syslog trace ids not parsed (had produced a false COMPLETE, case_416), ledger owners given as lookup_value ignored (accounts misassigned), timing-only links to non-account records, inventory extracts ignored for absence (mixed citations), retained records wrongly treated as history, missing post-remediation account checks. Changed 91 evaluation rows with no sample regressions (status 1.000, step F1 0.958, 0 false COMPLETE). Added 13 tests (53 total) including invariants on the real output (no citation after audit_at, every fix verified, order independence). Explained that the leaderboard score cannot be predicted from local metrics.
+
+Actions:
+* Created code/tools/inspect_case.py, code/tests/test_spotcheck_regressions.py, code/tests/test_output_invariants.py
+* Edited code/ghost/{evidence,pipeline}.py, code/evaluation/evaluation_report.md, code/docs/{EDGE_CASES,HANDOFF}.md
+* Cache-free full run (identical output), usage report, sample eval, pytest (53 passed), package build and secret check
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+

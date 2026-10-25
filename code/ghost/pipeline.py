@@ -148,6 +148,10 @@ class Auditor:
             slot = (cid, system)
             if rid in taken_resource or slot in taken_slot:
                 continue
+            if not shared and system != "account_service":
+                # Only an account is certain to exist for every request; any other record linked
+                # by timing alone must also appear in evidence anchored to the subject.
+                continue
             contested = len(rivals.get(rid, set())) > 1
             tier = SUPPORTED if shared else CANDIDATE
             r, subject, links = prepared[cid]
@@ -174,6 +178,7 @@ class Auditor:
                 results.append(CaseResult(r.case_id, "NOT_APPLICABLE", [], subject.user_id if subject else None, intent))
                 continue
             plan = Plan()
+            later_accounts: list = []
             if subject is None:
                 plan.notes.append("request email does not resolve to a known subject")
             for rid, link in sorted(links.items()):
@@ -191,6 +196,8 @@ class Auditor:
                 first = self._first_seen(rid)
                 if first is None or first > r.audit_at:
                     plan.notes.append(f"{rid}: first recorded after audit_at; did not exist at audit time")
+                    if system == "account_service" and link.tier == CONFIRMED:
+                        later_accounts.append(rid)
                     continue
                 if st.present is None and st.enabled is None and st.restore_allowed is None:
                     if system in ("security_service", "legal_service") and link.tier != CANDIDATE:
@@ -206,11 +213,20 @@ class Auditor:
                     else:
                         plan.notes.append(f"{rid}: no state evidence at audit time; not planned (unresolved)")
                         continue
-                if self._historical(rid, link, r):
+                if system not in ("security_service", "legal_service") and self._historical(rid, link, r):
+                    # retained records persist by policy, so an older sighting is still current
                     plan.notes.append(f"{rid}: only evidenced before the request and not touched by its "
                                       "workflow; treated as history outside the request scope")
                     continue
                 plan_resource(st, decision, r.audit_at, plan)
+            if plan.findings and later_accounts and not any(
+                    v.system_id == "account_service" for v in plan.verification):
+                # The end state of every deletion is "profile absent". When the subject's only
+                # identifier-confirmed account is evidenced after audit_at, keep that end-state
+                # check as future verification (no citation, no claim about the audit-time state).
+                for rid in later_accounts:
+                    plan.verification.append(Step("VERIFY_RECORD_ABSENT", "account_service", rid, ""))
+                    plan.notes.append(f"{rid}: added as post-remediation account check")
             status, steps = finalize(plan)
             results.append(CaseResult(r.case_id, status, steps, subject.user_id if subject else None, intent,
                                       links, plan.notes))

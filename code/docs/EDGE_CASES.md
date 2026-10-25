@@ -1,7 +1,7 @@
 # Edge-case coverage matrix
 
 Each row: failure mode → component → fixture → invariant → regression test → result.
-Results are from the last run of `python -m pytest code/tests -q` (40 passed) unless the
+Results are from the last run of `python -m pytest code/tests -q` (53 passed) unless the
 row says otherwise. "Design" means the behaviour is guaranteed by construction and exercised
 by the full-dataset run, without a dedicated unit test. "Not handled" rows are known limits.
 
@@ -22,6 +22,8 @@ by the full-dataset run, without a dedicated unit test. "Not handled" rows are k
 | I11 | Resources with no identifiers at all (anonymised analytics, purged accounts) | `_assign_workflow` | real samples case_21/25-28 | assigned one-to-one by anchored evidence, status consistency, self-calibrated timing; tier SUPPORTED/CANDIDATE, never CONFIRMED | sample eval | partial: genuinely tied pairs (same reported_at, no identifiers) can swap (case_03/25-28) |
 | I12 | Multiple simultaneous requests | global assignment over all participant requests | 6 requests reported 2026-09-05T12:00 | one resource → one request; one record per system per request | sample eval | partial (see I11) |
 | I14 | Catalog claim contradicted by the record (screen shows another person under the claimed id) | CONTRADICTED tier in `link_resources` | catalog links `marketing_1` to Ana; screen shows another person | not planned, conflict reported | `test_V2_screen_showing_another_person_refutes_catalog_claim` | pass (real case: eval case_63) |
+| I15 | Owner given as `lookup_value` in ledger rows | `ledger_to_obs` | bundle ledger row keyed by lookup_value | owner recognised, never reassigned by timing | `test_I15_ledger_lookup_value_establishes_owner` | pass (found by eval spot-check) |
+| I16 | Non-account record linked by timing only | `_assign_workflow` anchor rule | anonymise event with no anchoring file | not linked | `test_I16_non_account_record_needs_anchor_for_timing_link` | pass |
 | I13 | Recycled identifiers | `IdentityGraph` | checked on dataset: no old email is another user's current email | — | data check in development | not present in data; ambiguous identifiers resolve to `None` |
 
 ## Temporal and state
@@ -37,6 +39,7 @@ by the full-dataset run, without a dedicated unit test. "Not handled" rows are k
 | T7 | Stale snapshot vs newer log | ordering by capture time, then in-record time | real evidence | newest capture wins | design | pass |
 | T8 | Log export captured after audit but lines before it | ownership may use it, state may not | sample case_09 audit_record_4902 | linked; verified as future check with empty evidence | sample eval | pass |
 | T9 | Time zones / missing timestamps | `parse_time` → aware UTC; missing row time falls back to capture time | — | no naive datetimes | design | pass |
+| T11 | Retained record last seen before the request | history rule exempts security/legal | audit record seen a month earlier | still verified present | `test_T11_retained_record_seen_before_request_is_still_verified` | pass |
 | T10 | Replica lag / failover | presence in any replica table counts as present | primary empty, replica has row | REPORT_REMAINING_RECORD | `test_S1` | pass |
 
 ## Storage and evidence
@@ -52,6 +55,10 @@ by the full-dataset run, without a dedicated unit test. "Not handled" rows are k
 | S13 | Process state shown only on a screen | `screen_state` | connector "Healthy · Continuous"; archive in a recovery console | active flow / restore risk reported | `test_V1` | pass (real cases: eval case_39, case_55) |
 | S14 | Tombstone shown by its stable user_id in a reference registry | user-id alias for tombstones, single-person screens only | "user_1 · Retained reference" | VERIFY_RECORD_REDACTED citing the screen | `test_V3_retained_reference_screen_verifies_clean_tombstone` | pass |
 | S15 | Ticket screenshot vs attachment | attachment type only for PDFs | support conversation screenshot | REDACT (shared context), not DELETE | eval diff (case_53) | pass |
+| S16 | RFC 5424 syslog header carries the trace id | `SYSLOG_RE` in `parse_log_line` | `<15>1 node-9 account_service tr-1 - - …` | trace joins work in syslog archives | `test_S16`, `test_S16b` | pass (found by eval spot-check) |
+| S17 | Inventory scope as evidence of absence | `sql_inventory` coverage, fallback only | empty account scope, no explicit sighting | VERIFY_RECORD_ABSENT citing the inventory | `test_S17_inventory_scope_proves_absence_only_when_nothing_explicit` | pass |
+| S18 | Input row order | deterministic sorting everywhere | shuffled activity, manifest, requests | identical output | `test_output_independent_of_input_row_order` | pass |
+| S19 | Citation captured after audit_at | `reconstruct` availability filter | real output.csv | none | `test_no_citation_postdates_audit_at` | pass |
 | S6 | Images without a model | vision returns None → `ParseIssue(model_error/unsupported)` | offline run | reported; cached transcriptions reused | design | pass |
 | S7 | Identifiers in unexpected fields (`subject_selector`, `lookup_value`, `uploaded_by`) | field vocabulary in `evidence.py` | real dataset field scan | all identifier-bearing fields mapped | field-scan script during development | pass |
 | S8 | Free-text PII inside messages | `identifiers_in_text` on message fields | real support messages | exposure detected | design | pass |

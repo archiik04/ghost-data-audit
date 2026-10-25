@@ -65,6 +65,8 @@ requests (case_533–542) coincide with the 10 `CLASSIFY_REQUEST … non-deletio
 | 8 | Existence check (`first_seen ≤ audit_at`); accounts without state evidence still get their verification step; retained legal holds | 1.000 | 0.719 | 0.958 | 0 | yes |
 | 9 | Final review pass: screenshot state reading (connectors, restore consoles), row-level ownership in multi-person screens, refuted catalog claims, PDF-only attachment rule, tombstone references shown by user_id | 1.000 | 0.719 | 0.958 | 0 | yes (no sample change; fixes 7 evaluation rows, see below) |
 
+| 10 | Evaluation-set spot-check (see section below): RFC 5424 syslog traces, ledger `lookup_value` owners, anchor required for non-account timing links, inventory scope as fallback absence, retained records exempt from the history rule, future account check | 1.000 | 0.719 | 0.958 | 0 | yes (no sample change; 91 evaluation rows changed, no status changes vs the previous submission) |
+
 Rejected/neutral ideas: using timing for every system without consistency scoring (row 0 →
 spurious analytics/flow links, −precision); treating every JSON snapshot bundle as a full
 dump (caused false "absent" for live records, sample cases 21/24).
@@ -116,6 +118,29 @@ release run re-issued every model call from an empty cache and reproduced the sa
 `output.csv` byte-for-byte, i.e. the 3-vote intent labels and the screenshot readings were
 stable across independent runs.
 
+## Evaluation-set spot-check
+
+The 32 samples exercise only ~7 of the ~50 evidence families behind the 518 requests, so
+I audited evaluation rows by hand against the raw evidence (`code/tools/inspect_case.py`)
+and ran automatic consistency checks (resources no one owns per file; COMPLETE rows citing
+several files; rows without an account check). Families covered: notification-delivery log,
+search-index diagnostic, connector-configuration ledger, snapshot bundles, reporting /
+regional / read replicas, inventory extracts, syslog archives, service exports, screenshots.
+
+| Defect found | Effect before the fix | Fix | Test |
+|---|---|---|---|
+| RFC 5424 syslog lines (`<15>1 host app trace - - …`) lost their trace id, so lookups were never joined to the resources they returned | case_416 reported COMPLETE while a search entry and an active connector remained (a false COMPLETE), plus 22 other rows in two syslog clusters | syslog header parsed into service + trace id | `test_S16`, `test_S16b` |
+| Ledger rows in snapshot bundles name their owner in `lookup_value`, which was ignored | accounts belonging to one person were assigned to another by timing; retained audit records missing from ~25 rows | ledger owner read from `subject_reference`, `lookup_value`, `lookup_key` | `test_I15` |
+| Non-account records linked by timing alone (case_83 received another request's anonymised analytics record and "verified" it absent from a dump that never held it) | spurious verification steps | timing links to non-account records require subject-anchored evidence (as every correct sample link had) | `test_I16` |
+| Inventory extracts ignored for absence, so account checks cited an older dump while the rest of the row cited the cluster file (37 mixed rows) | evidence ids on account checks | inventory scope used as fallback absence (never overriding explicit observations) | `test_S17`, `test_S2` |
+| Retained audit record excluded as "history" because it was seen before the request (case_34) | missing VERIFY_RECORD_PRESENT | retained systems exempt from the history rule | `test_T11` |
+| Screenshot/PDF requests with no account check (the account is only evidenced after audit_at) | missing end-state check | identifier-confirmed account added as a post-remediation check on INCOMPLETE rows | output invariants |
+
+New invariant tests run on the real `output.csv`: one row per request, **no cited evidence
+captured after the case's audit_at**, every check in a COMPLETE row cited, every finding
+remediated and every remediation verified, retained records never deleted, resource
+prefixes consistent with systems, and identical output under shuffled input order.
+
 Open item: case_63 is COMPLETE with no steps. Its only linked record (`marketing_001`) is a
 catalog claim refuted by the screenshot of that record, which shows a different person. The
 agent will not delete or "verify" another person's profile on the strength of a refuted
@@ -124,7 +149,7 @@ is reported as a validator warning rather than hidden.
 
 ## Custom evaluation cases (created by us)
 
-The test suite builds 40 synthetic, self-contained datasets ("fixture worlds") in temporary
+The test suite builds 46 synthetic, self-contained datasets ("fixture worlds") in temporary
 directories; none of them modify the official data. Each one is an evaluation case with an
 expected outcome. Selected cases:
 

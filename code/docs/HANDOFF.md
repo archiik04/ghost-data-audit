@@ -135,6 +135,14 @@ the experiment log with measured numbers is in `evaluation_report.md`. The offic
 is hidden; these are supplementary metrics. 32 cases is a small sample, so synthetic fixture
 worlds (`code/tests`) cover behaviours the samples do not.
 
+### Validating beyond the samples
+
+Because the samples cover only a few evidence families, the evaluation set was audited by
+hand (`code/tools/inspect_case.py` prints a case's request, identifiers, links, steps and every
+raw evidence line about it) and by automatic consistency checks. This found two parser gaps
+(RFC 5424 syslog trace ids; ledger owners in `lookup_value`) that no sample exercised; one of
+them had produced a false COMPLETE. Contract invariants now run as tests on the real output.
+
 ## 9. Security and prompt-injection defences
 
 * Evidence and request text are data. Request text is quoted inside delimiters with an
