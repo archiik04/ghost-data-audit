@@ -114,7 +114,9 @@ deletion block is a restore risk.
 ## 7. Temporal rules
 
 * State uses only evidence whose **file capture time** ≤ `audit_at` (a log exported after the
-  audit is not available, even if its lines are older).
+  audit is not available, even if its lines are older), and never a row whose own timestamp
+  is after `audit_at` — the corpus plants such future-dated rows inside captures made at the
+  audit cutoff.
 * Ownership is timeless (who a record belongs to does not change), so later evidence may
   establish a link — but a resource whose earliest record is after `audit_at` did not exist
   at audit time and is excluded.

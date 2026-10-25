@@ -67,3 +67,17 @@ def test_T11_retained_record_seen_before_request_is_still_verified(world):
     world.request("c1", "ana@x.com")
     res, _ = world.run()
     assert ("VERIFY_RECORD_PRESENT", "audit_record_1", "") in ops(res["c1"])
+
+
+def test_T12_row_dated_after_audit_inside_earlier_capture_is_ignored(world):
+    # a ledger captured at audit time carries one row dated two days later (planted future event)
+    base(world)
+    ledger = {"exported_at": "2026-09-15T12:00:00Z", "records": [
+        {"recorded_at": "2026-09-15T12:00:00Z", "system": "account_service", "resource_id": "account_1",
+         "record_type": "USER_PROFILE", "result": "NOT_FOUND", "subject_reference": "ana@x.com"},
+        {"recorded_at": "2026-09-17T12:00:00Z", "system": "account_service", "resource_id": "account_1",
+         "record_type": "USER_PROFILE", "result": "FOUND", "subject_reference": "ana@x.com"}]}
+    world.file("e1", "m.json", "2026-09-15T12:00:00Z", json.dumps(ledger)).request("c1", "ana@x.com")
+    res, _ = world.run()
+    assert res["c1"].status == "COMPLETE"
+    assert ops(res["c1"]) == [("VERIFY_RECORD_ABSENT", "account_1", "e1")]

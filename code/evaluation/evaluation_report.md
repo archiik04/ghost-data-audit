@@ -67,6 +67,8 @@ requests (case_533–542) coincide with the 10 `CLASSIFY_REQUEST … non-deletio
 
 | 10 | Evaluation-set spot-check (see section below): RFC 5424 syslog traces, ledger `lookup_value` owners, anchor required for non-account timing links, inventory scope as fallback absence, retained records exempt from the history rule, future account check | 1.000 | 0.719 | 0.958 | 0 | yes (no sample change; 91 evaluation rows changed, no status changes vs the previous submission) |
 
+| 11 | Second spot-check: rows dated after audit_at inside an earlier capture are ignored instead of clamped to the capture time | 1.000 | 0.719 | 0.958 | 0 | yes (2 evaluation rows: false "remaining record" findings removed) |
+
 Rejected/neutral ideas: using timing for every system without consistency scoring (row 0 →
 spurious analytics/flow links, −precision); treating every JSON snapshot bundle as a full
 dump (caused false "absent" for live records, sample cases 21/24).
@@ -136,6 +138,27 @@ regional / read replicas, inventory extracts, syslog archives, service exports, 
 | Retained audit record excluded as "history" because it was seen before the request (case_34) | missing VERIFY_RECORD_PRESENT | retained systems exempt from the history rule | `test_T11` |
 | Screenshot/PDF requests with no account check (the account is only evidenced after audit_at) | missing end-state check | identifier-confirmed account added as a post-remediation check on INCOMPLETE rows | output invariants |
 
+### Second spot-check (timing-only accounts and remaining families)
+
+* **Timing-only account links.** Among the 247 accounts linked by identifiers (an independent
+  ground truth for this rule), 242 (98 %) satisfy the status rule the timing assignment relies
+  on (COMPLETE↔SUCCESS, PARTIALLY_COMPLETE↔PARTIAL, NOT_STARTED↔FAILED); the 5 exceptions are
+  screenshot requests whose account deletion belongs to a later request by the same person.
+  All 258 timing-linked accounts satisfy it. 131 of them had a same-status rival in the
+  window; three further disambiguation hypotheses were tested on identifier-confirmed pairs
+  and rejected (fixed spacing to the request's other workflow steps: SD 10–13 min, no tighter
+  than to the report time; ordering by case number, request time or email: ~50/50). These
+  ties are irreducible with the supplied evidence, so the deterministic one-to-one choice is
+  kept.
+* **Families inspected by hand:** operations stream, cloud runtime, export manifest, regional
+  and read replicas, application trace, reporting replica. One new defect: the export
+  manifest and connector ledger each contain a row dated **after** the file's capture time
+  (and after the audit cutoff of the requests they concern). The parser clamped row times
+  to the capture time, so the future "FOUND" row overrode the audit-time "NOT_FOUND": two
+  requests (case_135, case_383) were reported INCOMPLETE with a false remaining-record
+  finding. Row times are no longer clamped and any row dated after audit_at is ignored
+  (`test_T12`).
+
 New invariant tests run on the real `output.csv`: one row per request, **no cited evidence
 captured after the case's audit_at**, every check in a COMPLETE row cited, every finding
 remediated and every remediation verified, retained records never deleted, resource
@@ -149,7 +172,7 @@ is reported as a validator warning rather than hidden.
 
 ## Custom evaluation cases (created by us)
 
-The test suite builds 46 synthetic, self-contained datasets ("fixture worlds") in temporary
+The test suite builds 47 synthetic, self-contained datasets ("fixture worlds") in temporary
 directories; none of them modify the official data. Each one is an evaluation case with an
 expected outcome. Selected cases:
 

@@ -271,3 +271,23 @@ repo_root=C:\Users\HP\Projects\ghost-data-audit
 worktree=main
 parent_agent=none
 
+## [2026-10-25T01:24:01Z] Second spot-check: timing-only accounts and remaining clusters
+
+User Prompt (verbatim, secrets redacted):
+Do one more targeted spot-check on the timing-only account links and the clusters not yet checked, then rebuild the files.
+
+Agent Response Summary:
+Validated the timing-assignment rule against independent ground truth: 98% of the 247 identifier-confirmed accounts follow the status rule it relies on, and all 258 timing-linked accounts satisfy it. Tested and rejected three ways to break same-status ties (step spacing, case order, request order), so those ties are irreducible with the supplied evidence. Inspected the remaining evidence families by hand and found one new trap: rows dated after audit_at inside captures made at the cutoff, which the parser had clamped into the past. That produced false remaining-record findings in case_135 and case_383. Fixed it, added a regression test (54 total), confirmed no sample regressions, ran a cache-free release (identical output, est. USD 0.65), and rebuilt code.zip.
+
+Actions:
+* Edited code/ghost/{evidence,audit}.py, code/tests/test_spotcheck_regressions.py, code/evaluation/evaluation_report.md, code/docs/{EDGE_CASES,HANDOFF}.md
+* Ran inspect_case.py on 10 more cases, timing-rule analyses, pytest (54 passed), sample eval, cache-free code/main.py, package build and secret check
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=C:\Users\HP\Projects\ghost-data-audit
+worktree=main
+parent_agent=none
+

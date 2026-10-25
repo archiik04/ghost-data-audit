@@ -56,7 +56,9 @@ def reconstruct(resource_id: str, system: str, observations: list[Observation], 
     facts = []  # (order_key, kind, value, evidence_id)
     for o in observations:
         when = avail.get(o.evidence_id, o.time)
-        if when > audit_at:
+        if when > audit_at or o.time > audit_at:
+            # not available at audit time, or a row dated after audit_at (even inside an
+            # earlier capture): neither may shape the audit-time state
             continue
         key = (when, o.time, o.evidence_id)
         if o.present is not None:

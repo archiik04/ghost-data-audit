@@ -1,7 +1,7 @@
 # Edge-case coverage matrix
 
 Each row: failure mode → component → fixture → invariant → regression test → result.
-Results are from the last run of `python -m pytest code/tests -q` (53 passed) unless the
+Results are from the last run of `python -m pytest code/tests -q` (54 passed) unless the
 row says otherwise. "Design" means the behaviour is guaranteed by construction and exercised
 by the full-dataset run, without a dedicated unit test. "Not handled" rows are known limits.
 
@@ -40,6 +40,7 @@ by the full-dataset run, without a dedicated unit test. "Not handled" rows are k
 | T8 | Log export captured after audit but lines before it | ownership may use it, state may not | sample case_09 audit_record_4902 | linked; verified as future check with empty evidence | sample eval | pass |
 | T9 | Time zones / missing timestamps | `parse_time` → aware UTC; missing row time falls back to capture time | — | no naive datetimes | design | pass |
 | T11 | Retained record last seen before the request | history rule exempts security/legal | audit record seen a month earlier | still verified present | `test_T11_retained_record_seen_before_request_is_still_verified` | pass |
+| T12 | Row dated after audit_at inside an earlier capture | row times never clamped; `reconstruct` drops rows with time > audit_at | manifest captured at audit time with a row dated two days later | future row ignored | `test_T12_row_dated_after_audit_inside_earlier_capture_is_ignored` | pass (real cases: eval case_135, case_383) |
 | T10 | Replica lag / failover | presence in any replica table counts as present | primary empty, replica has row | REPORT_REMAINING_RECORD | `test_S1` | pass |
 
 ## Storage and evidence

@@ -75,7 +75,7 @@ def record_to_obs(rec: dict, evidence_id: str, default_time: datetime, source: s
     for f in TIME_FIELDS:
         t = parse_time(flat.get(f)) if isinstance(flat.get(f), str) else None
         if t:
-            time = min(t, default_time) if default_time else t
+            time = t  # keep the record's own time: a future-dated row must not be clamped into the past
             break
     obs = Observation(evidence_id=evidence_id, time=time, resource_id=rid,
                       system=system_for(rid) or str(flat.get("system") or flat.get("origin_system") or "unknown"),
@@ -183,7 +183,7 @@ def ledger_to_obs(row: dict, evidence_id: str, default_time: datetime, source: s
         return None
     result = (row.get("result") or "").strip().upper()
     time = parse_time(row.get("recorded_at") or row.get("time") or "") or default_time
-    time = min(time, default_time)
+    # keep the row's own recorded time (may post-date the capture: such rows are filtered by audit_at)
     obs = Observation(evidence_id=evidence_id, time=time, resource_id=rid,
                       system=system_for(rid) or (row.get("system") or "unknown"), source=source,
                       record_type=(row.get("record_type") or "").strip().upper() or None, result=result)
@@ -407,12 +407,12 @@ def parse_log(path: Path, evidence_id: str, file_time: datetime, index: Evidence
                 trace_keys.setdefault(tid, set()).add(ident)
     for ts, d in lines:
         if "record_type" in d and "result" in d and "resource_id" in d:
-            obs = ledger_to_obs(d, evidence_id, min(ts, file_time), "log")
+            obs = ledger_to_obs(d, evidence_id, ts, "log")
         else:
             lookup = d.get("lookup_key", "")
             if not d.get("resource_id") and is_resource_id(lookup):
                 d["resource_id"] = lookup
-            obs = record_to_obs(d, evidence_id, min(ts, file_time), "log",
+            obs = record_to_obs(d, evidence_id, ts, "log",
                                 extra_keys=trace_keys.get(d.get("trace_id", ""), ()),
                                 default_present=None)
             if obs is None:
